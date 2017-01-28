@@ -19,18 +19,33 @@ convertBSON() {
 	sed '/null/d'                                                                  > "${1}.json"
 }
 
-if [ $# -ne 1 ]; then
-	echo "Usage: ${0} URL"
+if [ $# -eq 0 ]; then
+	echo "Usage: ${0} (-n|--name) (-k|--no-clean) [URL]"
 	exit 1
 fi
 
-# Set to true to use title as filename, false to use ID as filename.
 NAME=false
-# Delete temp unconverted files
 CLEAN=true
 
+while [[ $# -gt 0 ]]; do
+	OPT="${1}"
+	case ${OPT} in
+		-n|--name)
+			NAME=true
+			shift
+			;;
+		-k|--no-clean)
+			CLEAN=false
+			shift
+			;;
+		*)
+			URL="${1}"
+			shift
+			;;
+	esac
+done
+
 # Fetch download link and title.
-URL="${1}"
 API="http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v0001/" 
 MID=`echo ${URL} | sed 's/.*id=\([0-9]*\)/\1/'`
 MOD=`curl -s --data "itemcount=1&publishedfileids[0]=${MID}&format=json" ${API}`
@@ -49,7 +64,7 @@ echo "Downloading ${TIT}"
 try "curl -s ${DLL} -o ${FLN}" "Download failed" 2
 
 # Tries to detect if file is a bson or cjc file. 
-# If detection fails try to run with CLEAN=false, and rename the file to `filename.cjc`
+# If detection fails try to run with CLEAN=false, and rename the file to `filename.cjc`.
 FLT=`file ${FLN}`
 FLT=`echo ${FLT} | sed 's/.*: //'`
 
@@ -58,9 +73,10 @@ if   [ "${FLT}" == "TrueType font data" ]; then
 	cp "${FLN}" "${FLN}.cjc"
 elif [ "${FLT}" == "data" ]; then
 	EXT="json"
-	convertBSON("${FLN}" "${TIT}")
+	convertBSON "${FLN}" "${TIT}"
 else
-	echo "Unsupported "
+	echo "Unexpected filetype. Please report issue with the link to the workshop."
+	echo "You might get this mod to work by using the --no-clean argument and renaming the file to `filename.cjc`"
 fi
 
 if [ "${CLEAN}" == "true" ]; then

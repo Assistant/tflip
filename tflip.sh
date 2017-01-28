@@ -2,13 +2,22 @@
 
 ###
 #
-# Download and converts Tabletop Simulator binary mods to usable .json files.
+# Download and converts Tabletop Simulator binary mods to usable .json or .cjc files.
 #
 # Reqiures: mongodb, jq, curl, and sed.
 ###
 yell() { echo "$0: $*" >&2; }
 die() { yell "$1"; exit "$2"; }
 try() { $1 || die "$2" "$3"; }
+convertBSON() {
+	# Convert bson to json, remove artifacts, and whitespace formating
+	bsondump "${FLN}" 2>/dev/null                                                  |\
+	sed -r 's/(\"DrawImage\":)\{[^\}]*\"\$binary\":(\"[^\}\"]*\")([^\}]*)\}/\1\2/' |\
+	jq -M .                                                                        |\
+	sed 's/"SaveName": "None"/"SaveName": "'"${2}"'"/'                             |\
+	sed 's/"GameMode": "None"/"GameMode": "'"${2}"'"/'                             |\
+	sed '/null/d'                                                                  > "${1}.json"
+}
 
 if [ $# -ne 1 ]; then
 	echo "Usage: ${0} URL"
@@ -17,6 +26,8 @@ fi
 
 # Set to true to use title as filename, false to use ID as filename.
 NAME=false
+# Delete temp unconverted files
+CLEAN=true
 
 # Fetch download link and title.
 URL="${1}"
@@ -37,21 +48,30 @@ fi
 echo "Downloading ${TIT}"
 try "curl -s ${DLL} -o ${FLN}" "Download failed" 2
 
+# Tries to detect if file is a bson or cjc file. 
+# If detection fails try to run with CLEAN=false, and rename the file to `filename.cjc`
+FLT=`file ${FLN}`
+FLT=`echo ${FLT} | sed 's/.*: //'`
 
-# Convert bson to json, remove artifacts, and whitespace formating
-bsondump "${FLN}" 2>/dev/null                                                  |\
-sed -r 's/(\"DrawImage\":)\{[^\}]*\"\$binary\":(\"[^\}\"]*\")([^\}]*)\}/\1\2/' |\
-jq -M .                                                                        |\
-sed 's/"SaveName": "None"/"SaveName": "'"${TIT}"'"/'                           |\
-sed 's/"GameMode": "None"/"GameMode": "'"${TIT}"'"/'                           |\
-sed '/null/d'                                                                  > "${FLN}.json"
+if   [ "${FLT}" == "TrueType font data" ]; then
+	EXT="cjc"
+	cp "${FLN}" "${FLN}.cjc"
+elif [ "${FLT}" == "data" ]; then
+	EXT="json"
+	convertBSON("${FLN}" "${TIT}")
+else
+	echo "Unsupported "
+fi
 
-rm "${FLN}"
-if [ -s "${FLN}.json" ]; then
-	echo "Saved on ${FLN}.json"
+if [ "${CLEAN}" == "true" ]; then
+	rm "${FLN}"
+fi
+
+if [ -s "${FLN}.${EXT}" ]; then
+	echo "Saved on ${FLN}.${EXT}"
 else
 	echo "Saving failed" 
-	rm "${FLN}.json"
+	rm "${FLN}.${EXT}"
 	exit 3
 fi
 

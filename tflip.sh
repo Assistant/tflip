@@ -11,7 +11,7 @@ die() { yell "$1"; exit "$2"; }
 try() { $1 || die "$2" "$3"; }
 convertBSON() {
 	# Convert bson to json, remove artifacts, and whitespace formating
-	bsondump "${FLN}" 2>/dev/null                                                  |\
+	bsondump "${1}" 2>/dev/null                                                    |\
 	sed -r 's/(\"DrawImage\":)\{[^\}]*\"\$binary\":(\"[^\}\"]*\")([^\}]*)\}/\1\2/' |\
 	jq -M .                                                                        |\
 	sed 's/"SaveName": "None"/"SaveName": "'"${2}"'"/'                             |\

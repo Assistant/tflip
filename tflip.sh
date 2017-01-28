@@ -18,6 +18,7 @@ fi
 # Set to true to use title as filename, false to use ID as filename.
 NAME=false
 
+# Fetch download link and title.
 URL="${1}"
 API="http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v0001/" 
 MID=`echo ${URL} | sed 's/.*id=\([0-9]*\)/\1/'`
@@ -36,19 +37,21 @@ fi
 echo "Downloading ${TIT}"
 try "curl -s ${DLL} -o ${FLN}" "Download failed" 2
 
-bsondump "${FLN}" 2>/dev/null                        |\
-sed 's/{"$binary"://'                                |\
-sed 's/,"$type":"00"}//'                             |\
-jq -M .                                              |\
-sed 's/"SaveName": "None"/"SaveName": "'"${TIT}"'"/' |\
-sed 's/"GameMode": "None"/"GameMode": "'"${TIT}"'"/' |\
-sed '/null/d'                                        > "${FLN}.json"
+
+# Convert bson to json, remove artifacts, and whitespace formating
+bsondump "${FLN}" 2>/dev/null                                                  |\
+sed -r 's/(\"DrawImage\":)\{[^\}]*\"\$binary\":(\"[^\}\"]*\")([^\}]*)\}/\1\2/' |\
+jq -M .                                                                        |\
+sed 's/"SaveName": "None"/"SaveName": "'"${TIT}"'"/'                           |\
+sed 's/"GameMode": "None"/"GameMode": "'"${TIT}"'"/'                           |\
+sed '/null/d'                                                                  > "${FLN}.json"
 
 rm "${FLN}"
 if [ -s "${FLN}.json" ]; then
 	echo "Saved on ${FLN}.json"
 else
 	echo "Saving failed" 
+	rm "${FLN}.json"
 	exit 3
 fi
 
